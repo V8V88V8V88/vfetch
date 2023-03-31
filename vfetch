@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Get system information using uname command
+user=$USER
+system=$(uname -s)
+hostname=$(uname -n)
+kernel=$(uname -r)
+architecture=$(uname -m)
+
+# Get CPU information using lscpu command
+cpu=$(lscpu | grep "Model name" | awk -F: '{print $2}' | sed 's/^[ \t]*//')
+
+# Get RAM information using free command
+used=$(free -m | awk 'NR==2{print $3}')
+mem=$(free -m | awk 'NR==2{print $2}')
+
+# Get GPU information using lspci command
+gpu=$(lspci | grep -i vga | awk -F: '{print $3}' | sed 's/^[ \t]*//')
+
+# Get disk usage information using df command
+disk=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)\n", $3,$2,$5}')
+
+# Display all system information
+echo "Username: $user"
+echo "Hostname: $hostname"
+echo "System: $system"
+echo "Kernel: $kernel"
+echo "Architecture: $architecture"
+echo "CPU: $cpu"
+echo "RAM: $used MB / $mem MB"
+echo "GPU: $gpu"
+echo "Disk Usage: $disk"
