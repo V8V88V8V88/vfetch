@@ -1,32 +1,49 @@
 #!/bin/bash
 
-# Get system information using uname command
-user=$USER
-system=$(uname -s)
-hostname=$(uname -n)
-kernel=$(uname -r)
-architecture=$(uname -m)
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+PURPLE=$(tput setaf 5)
+CYAN=$(tput setaf 6)
+NC=$(tput sgr0)
 
-# Get CPU information using lscpu command
-cpu=$(lscpu | grep "Model name" | awk -F: '{print $2}' | sed 's/^[ \t]*//')
+user="${YELLOW}$USER${NC}"
+system="${GREEN}$(uname -s)${NC}"
+hostname="${CYAN}$(uname -n)${NC}"
+kernel="${PURPLE}$(uname -r)${NC}"
+architecture="${RED}$(uname -m)${NC}"
 
-# Get RAM information using free command
-used=$(free -m | awk 'NR==2{print $3}')
-mem=$(free -m | awk 'NR==2{print $2}')
+cpu_model=$(lscpu | grep "Model name" | awk -F: '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
+cpu_cores=$(lscpu | grep "CPU(s)" | awk -F: '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
+cpu="${GREEN}$cpu_model ($cpu_cores)${NC}"
 
-# Get GPU information using lspci command
-gpu=$(lspci | grep -i vga | awk -F: '{print $3}' | sed 's/^[ \t]*//')
+used=$(free -m | awk 'NR==2{printf "%dMB", $3}')
+mem=$(free -m | awk 'NR==2{printf "%dMB", $2}')
+ram="${BLUE}$used / $mem${NC}"
 
-# Get disk usage information using df command
-disk=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)\n", $3,$2,$5}')
+gpu=$(lspci | grep -i vga | awk -F: '{print $3}' | sed 's/^[ \t]*//;s/[ \t]*$//')
+gpu="${PURPLE}$gpu${NC}"
 
-# Display all system information
+disk=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)", $3,$2,$5}')
+disk="${RED}$disk${NC}"
+
+echo "${YELLOW}
+██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗    
+██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║    
+██║   ██║█████╗  █████╗     ██║   ██║     ███████║    
+╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║    
+ ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║    
+  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝    
+                                                      ${NC}"
+
+echo ""
 echo "Username: $user"
 echo "Hostname: $hostname"
 echo "System: $system"
 echo "Kernel: $kernel"
 echo "Architecture: $architecture"
 echo "CPU: $cpu"
-echo "RAM: $used MB / $mem MB"
+echo "RAM: $ram"
 echo "GPU: $gpu"
 echo "Disk Usage: $disk"
