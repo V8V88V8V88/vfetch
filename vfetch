@@ -1,5 +1,4 @@
 #!/bin/bash
-
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
 YELLOW=$(tput setaf 3)
@@ -8,42 +7,70 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
+# Existing variables
 user="${YELLOW}$USER${NC}"
 system="${GREEN}$(uname -s)${NC}"
 hostname="${CYAN}$(uname -n)${NC}"
 kernel="${PURPLE}$(uname -r)${NC}"
 architecture="${RED}$(uname -m)${NC}"
-
 cpu_model=$(lscpu | grep "Model name" | awk -F: '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
 cpu_cores=$(lscpu | grep "CPU(s)" | awk -F: '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
 cpu="${GREEN}$cpu_model ($cpu_cores)${NC}"
-
 used=$(free -m | awk 'NR==2{printf "%dMB", $3}')
 mem=$(free -m | awk 'NR==2{printf "%dMB", $2}')
 ram="${BLUE}$used / $mem${NC}"
-
 gpu=$(lspci | grep -i vga | awk -F: '{print $3}' | sed 's/^[ \t]*//;s/[ \t]*$//')
 gpu="${PURPLE}$gpu${NC}"
-
 disk=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)", $3,$2,$5}')
 disk="${RED}$disk${NC}"
 
-echo "${YELLOW}
-██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗    
-██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║    
-██║   ██║█████╗  █████╗     ██║   ██║     ███████║    
-╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║    
- ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║    
-  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝    
-                                                      ${NC}"
+# New variables
+os_name="${GREEN}$(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)${NC}"
+uptime="${YELLOW}$(uptime -p | sed 's/up //')${NC}"
+shell="${CYAN}$(basename $SHELL)${NC}"
+de="${BLUE}$XDG_CURRENT_DESKTOP${NC}"
+packages_rpm="${PURPLE}$(rpm -qa | wc -l) (rpm)${NC}"
+packages_flatpak="${PURPLE}$(flatpak list 2>/dev/null | wc -l) (flatpak)${NC}"
+locale="${CYAN}$(locale | grep LANG | cut -d= -f2)${NC}"
 
+# Battery information (if laptop)
+if [ -d "/sys/class/power_supply/BAT0" ]; then
+    battery_status=$(cat /sys/class/power_supply/BAT0/status)
+    battery_percent=$(cat /sys/class/power_supply/BAT0/capacity)
+    battery="${RED}$battery_percent% ($battery_status)${NC}"
+else
+    battery="${RED}No battery detected${NC}"
+fi
+
+# Network information
+ip_address="${CYAN}$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)${NC}"
+
+# ASCII Art (your existing art)
+echo "${YELLOW}
+██╗ ██╗███████╗███████╗████████╗ ██████╗██╗ ██╗
+██║ ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║ ██║
+██║ ██║█████╗ █████╗ ██║ ██║ ███████║
+╚██╗ ██╔╝██╔══╝ ██╔══╝ ██║ ██║ ██╔══██║
+ ╚████╔╝ ██║ ███████╗ ██║ ╚██████╗██║ ██║
+ ╚═══╝ ╚═╝ ╚══════╝ ╚═╝ ╚═════╝╚═╝ ╚═╝
+${NC}"
+
+# Output all information
 echo ""
+echo "OS: $os_name"
 echo "Username: $user"
 echo "Hostname: $hostname"
 echo "System: $system"
 echo "Kernel: $kernel"
 echo "Architecture: $architecture"
+echo "Uptime: $uptime"
+echo "Shell: $shell"
+echo "DE: $de"
+echo "Packages: $packages_rpm, $packages_flatpak"
 echo "CPU: $cpu"
 echo "RAM: $ram"
 echo "GPU: $gpu"
 echo "Disk Usage: $disk"
+echo "Battery: $battery"
+echo "Local IP: $ip_address"
+echo "Locale: $locale"
