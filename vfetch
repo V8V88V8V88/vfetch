@@ -8,67 +8,88 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
-# ASCII Art with proper formatting
-cat << EOF
+# Function to print padded info
+print_info() {
+    printf "%-45s %s\n" "$1" "$2"
+}
+
+# Store the ASCII art in an array
+readarray -t ascii_art << "EOF"
 ${RED}
 ██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
 ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
 ██║   ██║█████╗  █████╗     ██║   ██║     ███████║
 ╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║
  ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║
-  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
-${NC}
+  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝${NC}
 EOF
 
-# Get all system information fast
-echo "OS: ${GREEN}$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)${NC}"
-echo "Username: ${YELLOW}$USER${NC}"
-echo "Hostname: ${CYAN}$(hostname)${NC}"
-echo "System: ${GREEN}$(uname -s)${NC}"
-echo "Kernel: ${PURPLE}$(uname -r)${NC}"
-echo "Architecture: ${RED}$(uname -m)${NC}"
-echo "Uptime: ${YELLOW}$(uptime -p | sed 's/up //')${NC}"
-echo "Shell: ${CYAN}$(basename $SHELL)${NC}"
-echo "DE: ${BLUE}$XDG_CURRENT_DESKTOP${NC}"
+# Get system information
+os="${GREEN}$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)${NC}"
+host="${CYAN}$(hostname)${NC}"
+kernel="${PURPLE}$(uname -r)${NC}"
+uptime="${YELLOW}$(uptime -p | sed 's/up //')${NC}"
+packages="${PURPLE}$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)${NC}"
+shell="${CYAN}$(basename $SHELL)${NC}"
+de="${BLUE}$XDG_CURRENT_DESKTOP${NC}"
 
-# Fast package counting
-rpm_count=$(rpm -qa | wc -l)
-flatpak_count=$(flatpak list 2>/dev/null | wc -l)
-echo "Packages: ${PURPLE}$rpm_count (rpm), $flatpak_count (flatpak)${NC}"
-
-# CPU info (faster but accurate method)
+# CPU info
 IFS=':' read -r _ cpu_model < <(grep "model name" /proc/cpuinfo | head -1)
 cpu_cores=$(grep -c ^processor /proc/cpuinfo)
-echo "CPU: ${GREEN}${cpu_model} ($cpu_cores)${NC}"
+cpu="${GREEN}${cpu_model} ($cpu_cores)${NC}"
 
-# Memory (direct from /proc/meminfo)
+# Memory info
 while read -r line; do
-   case $line in
-       *MemTotal:*) total=$((${line##* }/1024));;
-       *MemAvailable:*) avail=$((${line##* }/1024));;
-   esac
+    case $line in
+        *MemTotal:*) total=$((${line##* }/1024));;
+        *MemAvailable:*) avail=$((${line##* }/1024));;
+    esac
 done < /proc/meminfo
 used=$((total-avail))
-echo "RAM: ${BLUE}${used}MB / ${total}MB${NC}"
+memory="${BLUE}${used}MB / ${total}MB${NC}"
 
-# GPU (proper formatting)
-gpu=$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')
-echo "GPU: ${PURPLE}$gpu${NC}"
+# GPU info
+gpu="${PURPLE}$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')${NC}"
 
-# Disk usage (with proper formatting)
+# Disk info
 read -r _ _ used total used_percent _ <<< "$(df -h / | awk 'NR==2{print $3,$2,$5}')"
-echo "Disk Usage: ${RED}$used/$total ($used_percent)${NC}"
+disk="${RED}$used/$total ($used_percent)${NC}"
 
-# Battery (if exists, with proper formatting)
+# Battery info
 if [ -d "/sys/class/power_supply/BAT0" ]; then
-   bat_status=$(< /sys/class/power_supply/BAT0/status)
-   bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
-   echo "Battery: ${RED}$bat_percent% ($bat_status)${NC}"
+    bat_status=$(< /sys/class/power_supply/BAT0/status)
+    bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
+    battery="${RED}$bat_percent% ($bat_status)${NC}"
 fi
 
-# IP (with proper formatting)
-ip=$(hostname -I | cut -d' ' -f1)
-echo "Local IP: ${CYAN}$ip${NC}"
+# Store system info in array
+readarray -t sys_info << EOF
+OS: $os
+Host: $host
+Kernel: $kernel
+Uptime: $uptime
+Packages: $packages
+Shell: $shell
+DE: $de
+CPU: $cpu
+Memory: $memory
+GPU: $gpu
+Disk: $disk
+Battery: $battery
+Local IP: ${CYAN}$(hostname -I | cut -d' ' -f1)${NC}
+Locale: ${CYAN}$LANG${NC}
+EOF
 
-# Locale
-echo "Locale: ${CYAN}$LANG${NC}"
+# Print ASCII art and system info side by side
+max_length=${#ascii_art[@]}
+if [[ ${#sys_info[@]} -gt $max_length ]]; then
+    max_length=${#sys_info[@]}
+fi
+
+echo
+for ((i=0; i<max_length; i++)); do
+    ascii_line="${ascii_art[$i]:-}"
+    info_line="${sys_info[$i]:-}"
+    printf "%-65s%s\n" "$ascii_line" "$info_line"
+done
+echo
