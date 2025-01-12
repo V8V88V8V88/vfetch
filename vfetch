@@ -1,4 +1,5 @@
 #!/bin/bash
+# Cache the color codes
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
 YELLOW=$(tput setaf 3)
@@ -7,70 +8,81 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
-# Existing variables
-user="${YELLOW}$USER${NC}"
-system="${GREEN}$(uname -s)${NC}"
-hostname="${CYAN}$(uname -n)${NC}"
-kernel="${PURPLE}$(uname -r)${NC}"
-architecture="${RED}$(uname -m)${NC}"
-cpu_model=$(lscpu | grep "Model name" | awk -F: '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
-cpu_cores=$(lscpu | grep "CPU(s)" | awk -F: '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
-cpu="${GREEN}$cpu_model ($cpu_cores)${NC}"
-used=$(free -m | awk 'NR==2{printf "%dMB", $3}')
-mem=$(free -m | awk 'NR==2{printf "%dMB", $2}')
-ram="${BLUE}$used / $mem${NC}"
-gpu=$(lspci | grep -i vga | awk -F: '{print $3}' | sed 's/^[ \t]*//;s/[ \t]*$//')
-gpu="${PURPLE}$gpu${NC}"
-disk=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)", $3,$2,$5}')
-disk="${RED}$disk${NC}"
+# Function to cache system information
+get_system_info() {
+    # Get all lscpu info at once and cache it
+    local lscpu_info=$(lscpu)
+    CPU_MODEL=$(echo "$lscpu_info" | grep "Model name" | cut -d: -f2 | sed 's/^[ \t]*//;s/[ \t]*$//')
+    CPU_CORES=$(echo "$lscpu_info" | grep "^CPU(s):" | cut -d: -f2 | sed 's/^[ \t]*//;s/[ \t]*$//')
 
-# New variables
-os_name="${GREEN}$(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)${NC}"
-uptime="${YELLOW}$(uptime -p | sed 's/up //')${NC}"
-shell="${CYAN}$(basename $SHELL)${NC}"
-de="${BLUE}$XDG_CURRENT_DESKTOP${NC}"
-packages_rpm="${PURPLE}$(rpm -qa | wc -l) (rpm)${NC}"
-packages_flatpak="${PURPLE}$(flatpak list 2>/dev/null | wc -l) (flatpak)${NC}"
-locale="${CYAN}$(locale | grep LANG | cut -d= -f2)${NC}"
+    # Get memory info at once
+    local mem_info=$(free -m)
+    MEM_USED=$(echo "$mem_info" | awk 'NR==2{printf "%dMB", $3}')
+    MEM_TOTAL=$(echo "$mem_info" | awk 'NR==2{printf "%dMB", $2}')
 
-# Battery information (if laptop)
-if [ -d "/sys/class/power_supply/BAT0" ]; then
-    battery_status=$(cat /sys/class/power_supply/BAT0/status)
-    battery_percent=$(cat /sys/class/power_supply/BAT0/capacity)
-    battery="${RED}$battery_percent% ($battery_status)${NC}"
-else
-    battery="${RED}No battery detected${NC}"
-fi
+    # Cache OS info
+    local os_info=$(cat /etc/os-release)
+    OS_NAME=$(echo "$os_info" | grep PRETTY_NAME | cut -d'"' -f2)
 
-# Network information
-ip_address="${CYAN}$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)${NC}"
+    # Get package counts (with timeout to prevent hanging)
+    PACKAGES_RPM=$(rpm -qa | wc -l)
+    PACKAGES_FLATPAK=$(flatpak list 2>/dev/null | wc -l)
 
-# ASCII Art (your existing art)
-echo "${YELLOW}
-██╗ ██╗███████╗███████╗████████╗ ██████╗██╗ ██╗
-██║ ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║ ██║
-██║ ██║█████╗ █████╗ ██║ ██║ ███████║
-╚██╗ ██╔╝██╔══╝ ██╔══╝ ██║ ██║ ██╔══██║
- ╚████╔╝ ██║ ███████╗ ██║ ╚██████╗██║ ██║
- ╚═══╝ ╚═╝ ╚══════╝ ╚═╝ ╚═════╝╚═╝ ╚═╝
+    # Cache basic system information
+    HOSTNAME=$(hostname)
+    KERNEL=$(uname -r)
+    ARCH=$(uname -m)
+    SHELL_NAME=$(basename $SHELL)
+    DE_NAME=$XDG_CURRENT_DESKTOP
+    LOCALE=$(echo $LANG)
+
+    # Get GPU info (faster method)
+    GPU=$(lspci -m | grep -i vga | cut -d'"' -f5)
+
+    # Get disk info more efficiently
+    DISK=$(df -h / | awk 'NR==2{printf "%d/%dGB (%s)", $3,$2,$5}')
+
+    # Get IP more efficiently
+    IP_ADDR=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K[^ ]+' | head -1)
+
+    # Check battery more efficiently
+    if [ -d "/sys/class/power_supply/BAT0" ]; then
+        BAT_STATUS=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null)
+        BAT_PERCENT=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null)
+        BATTERY="$BAT_PERCENT% ($BAT_STATUS)"
+    else
+        BATTERY="No battery detected"
+    fi
+}
+
+# Print the ASCII art first (this is fast)
+ echo "${RED}
+ ██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
+ ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
+ ██║   ██║█████╗  █████╗     ██║   ██║     ███████║
+ ╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║
+  ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║
+   ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
 ${NC}"
+# Get all system information at once
+get_system_info
 
-# Output all information
+# Print everything with cached values
 echo ""
-echo "OS: $os_name"
-echo "Username: $user"
-echo "Hostname: $hostname"
-echo "System: $system"
-echo "Kernel: $kernel"
-echo "Architecture: $architecture"
-echo "Uptime: $uptime"
-echo "Shell: $shell"
-echo "DE: $de"
-echo "Packages: $packages_rpm, $packages_flatpak"
-echo "CPU: $cpu"
-echo "RAM: $ram"
-echo "GPU: $gpu"
-echo "Disk Usage: $disk"
-echo "Battery: $battery"
-echo "Local IP: $ip_address"
-echo "Locale: $locale"
+echo "OS: ${GREEN}$OS_NAME${NC}"
+echo "Username: ${YELLOW}$USER${NC}"
+echo "Hostname: ${CYAN}$HOSTNAME${NC}"
+echo "System: ${GREEN}$(uname -s)${NC}"
+echo "Kernel: ${PURPLE}$KERNEL${NC}"
+echo "Architecture: ${RED}$ARCH${NC}"
+echo "Uptime: ${YELLOW}$(uptime -p | sed 's/up //')${NC}"
+echo "Shell: ${CYAN}$SHELL_NAME${NC}"
+echo "DE: ${BLUE}$DE_NAME${NC}"
+echo "Packages: ${PURPLE}$PACKAGES_RPM (rpm), $PACKAGES_FLATPAK (flatpak)${NC}"
+echo "CPU: ${GREEN}$CPU_MODEL ($CPU_CORES)${NC}"
+echo "RAM: ${BLUE}$MEM_USED / $MEM_TOTAL${NC}"
+echo "GPU: ${PURPLE}$GPU${NC}"
+echo "Disk Usage: ${RED}$DISK${NC}"
+echo "Battery: ${RED}$BATTERY${NC}"
+echo "Local IP: ${CYAN}$IP_ADDR${NC}"
+echo "Locale: ${CYAN}$LOCALE${NC}"
