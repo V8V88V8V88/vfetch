@@ -1,4 +1,4 @@
-# vfetch: Displays Stylized Information for Your UNIX Systems
+# vfetch
 
 vfetch is a bash script that provides a colorful and informative display of system information, featuring a stylized ASCII art header.
 
