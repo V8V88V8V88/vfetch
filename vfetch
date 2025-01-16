@@ -9,21 +9,21 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
-# Get terminal width
+# Get terminal width for dynamic sizing
 TERM_WIDTH=$(tput cols)
 
-# Calculate padding dynamically
-ASCII_WIDTH=50  # Width of the ASCII art
-INFO_OFFSET=25  # Additional padding between ASCII and info
-TOTAL_PAD=$((ASCII_WIDTH + INFO_OFFSET))
+# Set explicit padding values
+ASCII_WIDTH=45      # Width of ASCII art
+RIGHT_PADDING=35    # Space between ASCII and info
+LABEL_WIDTH=12      # Width of info labels
 
-# Function to print info with proper padding and formatting
-print_info() {
-    printf "%s%-15s%s%s%s%s\n" "$RED" "$1" "${NC}" "${2:+:  }" "${2:-}" "${NC}"
+# Function to create a string of spaces
+create_padding() {
+    printf "%*s" "$1" ""
 }
 
-# Store the ASCII art (now simpler, will be colored during printing)
-readarray -t ascii_art << "EOF"
+# Store the ASCII art
+IFS='' read -r -d '' ASCII_ART << "EOF"
 ██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
 ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
 ██║   ██║█████╗  █████╗     ██║   ██║     ███████║
@@ -31,6 +31,9 @@ readarray -t ascii_art << "EOF"
  ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║
   ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
 EOF
+
+# Convert ASCII art to array
+mapfile -t ascii_art <<< "$ASCII_ART"
 
 # Get system information
 os=$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)
@@ -40,8 +43,6 @@ uptime=$(uptime -p | sed 's/up //')
 packages="$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)"
 shell=$(basename "$SHELL")
 de="$XDG_CURRENT_DESKTOP"
-
-# CPU info
 IFS=':' read -r _ cpu_model < <(grep "model name" /proc/cpuinfo | head -1)
 cpu_cores=$(grep -c ^processor /proc/cpuinfo)
 cpu="${cpu_model# } ($cpu_cores)"
@@ -56,72 +57,60 @@ done < /proc/meminfo
 used=$((total-avail))
 memory="${used}MB / ${total}MB"
 
-# GPU info
+# GPU and other info
 gpu=$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')
-
-# Disk info
 read -r _ used total used_percent _ <<< "$(df -h / | awk 'NR==2{print $3,$2,$5}')"
 disk="$used/$total ($used_percent)"
-
-# Battery info
 if [ -d "/sys/class/power_supply/BAT0" ]; then
     bat_status=$(< /sys/class/power_supply/BAT0/status)
     bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
     battery="$bat_percent% ($bat_status)"
 fi
-
-# Local IP and Locale
 local_ip=$(hostname -I | cut -d' ' -f1)
 locale="$LANG"
 
-# Function to create colored info string
-color_info() {
-    local label=$1
-    local value=$2
-    local color=$3
-    echo "${RED}${label}${NC}:  ${color}${value}${NC}"
-}
+# Create array of formatted info lines
+declare -a info_lines=(
+    "${RED}OS${NC}:${GREEN} $os${NC}"
+    "${RED}Host${NC}:${CYAN} $host${NC}"
+    "${RED}Kernel${NC}:${PURPLE} $kernel${NC}"
+    "${RED}Uptime${NC}:${YELLOW} $uptime${NC}"
+    "${RED}Packages${NC}:${PURPLE} $packages${NC}"
+    "${RED}Shell${NC}:${CYAN} $shell${NC}"
+    "${RED}DE${NC}:${BLUE} $de${NC}"
+    "${RED}CPU${NC}:${GREEN} $cpu${NC}"
+    "${RED}Memory${NC}:${BLUE} $memory${NC}"
+    "${RED}GPU${NC}:${PURPLE} $gpu${NC}"
+    "${RED}Disk${NC}:${RED} $disk${NC}"
+    "${RED}Battery${NC}:${RED} $battery${NC}"
+    "${RED}Local IP${NC}:${CYAN} $local_ip${NC}"
+    "${RED}Locale${NC}:${CYAN} $locale${NC}"
+)
 
-# Create info array with proper colors
-readarray -t info_array << EOF
-$(color_info "OS" "$os" "$GREEN")
-$(color_info "Host" "$host" "$CYAN")
-$(color_info "Kernel" "$kernel" "$PURPLE")
-$(color_info "Uptime" "$uptime" "$YELLOW")
-$(color_info "Packages" "$packages" "$PURPLE")
-$(color_info "Shell" "$shell" "$CYAN")
-$(color_info "DE" "$de" "$BLUE")
-$(color_info "CPU" "$cpu" "$GREEN")
-$(color_info "Memory" "$memory" "$BLUE")
-$(color_info "GPU" "$gpu" "$PURPLE")
-$(color_info "Disk" "$disk" "$RED")
-$(color_info "Battery" "$battery" "$RED")
-$(color_info "Local IP" "$local_ip" "$CYAN")
-$(color_info "Locale" "$locale" "$CYAN")
-EOF
+# Print everything with proper padding
+echo # Add top padding
 
-# Add some padding at the top
-echo
+# Get the maximum number of lines
+max_lines=$(( ${#ascii_art[@]} > ${#info_lines[@]} ? ${#ascii_art[@]} : ${#info_lines[@]} ))
 
-# Print ASCII art and info with dynamic padding
-max_lines=$((${#ascii_art[@]} > ${#info_array[@]} ? ${#ascii_art[@]} : ${#info_array[@]}))
-
+# Print ASCII and info side by side with fixed padding
 for ((i = 0; i < max_lines; i++)); do
-    if [ $i -lt ${#ascii_art[@]} ]; then
-        # Print ASCII art in red with calculated padding
-        printf "${RED}%-${TOTAL_PAD}s${NC}" "${ascii_art[$i]}"
+    # Print ASCII art (in red) if available, otherwise empty space
+    if ((i < ${#ascii_art[@]})); then
+        printf "${RED}%s" "${ascii_art[i]}"
     else
-        # Print empty padding if we're past ASCII art
-        printf "%-${TOTAL_PAD}s" ""
+        printf "%*s" "$ASCII_WIDTH" ""
     fi
     
-    # Print info if available
-    if [ $i -lt ${#info_array[@]} ]; then
-        printf "%s\n" "${info_array[$i]}"
-    else
-        printf "\n"
+    # Add fixed padding between ASCII and info
+    printf "%*s" "$RIGHT_PADDING" ""
+    
+    # Print info line if available
+    if ((i < ${#info_lines[@]})); then
+        printf "%s" "${info_lines[i]}"
     fi
+    
+    printf "\n"
 done
 
-# Add some padding at the bottom
-echo
+echo # Add bottom padding
