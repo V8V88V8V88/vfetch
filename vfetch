@@ -9,21 +9,21 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
-# Get terminal width for dynamic sizing
-TERM_WIDTH=$(tput cols)
-
-# Set explicit padding values
+# Fixed padding values
 ASCII_WIDTH=45      # Width of ASCII art
-RIGHT_PADDING=35    # Space between ASCII and info
-LABEL_WIDTH=12      # Width of info labels
+PAD_BETWEEN=20     # Padding between ASCII and info
+LABEL_WIDTH=15     # Width for labels
 
-# Function to create a string of spaces
-create_padding() {
-    printf "%*s" "$1" ""
+# Function to create uniform info line
+format_info() {
+    local label="$1"
+    local value="$2"
+    local color="$3"
+    printf "${RED}%-${LABEL_WIDTH}s${NC}%s ${color}%s${NC}" "$label" ":" "$value"
 }
 
-# Store the ASCII art
-IFS='' read -r -d '' ASCII_ART << "EOF"
+# Store ASCII art
+read -r -d '' ASCII_ART << "EOF"
 ██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
 ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
 ██║   ██║█████╗  █████╗     ██║   ██║     ███████║
@@ -43,6 +43,8 @@ uptime=$(uptime -p | sed 's/up //')
 packages="$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)"
 shell=$(basename "$SHELL")
 de="$XDG_CURRENT_DESKTOP"
+
+# CPU info
 IFS=':' read -r _ cpu_model < <(grep "model name" /proc/cpuinfo | head -1)
 cpu_cores=$(grep -c ^processor /proc/cpuinfo)
 cpu="${cpu_model# } ($cpu_cores)"
@@ -61,56 +63,62 @@ memory="${used}MB / ${total}MB"
 gpu=$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')
 read -r _ used total used_percent _ <<< "$(df -h / | awk 'NR==2{print $3,$2,$5}')"
 disk="$used/$total ($used_percent)"
+
+# Battery info
 if [ -d "/sys/class/power_supply/BAT0" ]; then
     bat_status=$(< /sys/class/power_supply/BAT0/status)
     bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
     battery="$bat_percent% ($bat_status)"
 fi
+
 local_ip=$(hostname -I | cut -d' ' -f1)
 locale="$LANG"
 
-# Create array of formatted info lines
+# Create info array with consistent formatting
 declare -a info_lines=(
-    "${RED}OS${NC}:${GREEN} $os${NC}"
-    "${RED}Host${NC}:${CYAN} $host${NC}"
-    "${RED}Kernel${NC}:${PURPLE} $kernel${NC}"
-    "${RED}Uptime${NC}:${YELLOW} $uptime${NC}"
-    "${RED}Packages${NC}:${PURPLE} $packages${NC}"
-    "${RED}Shell${NC}:${CYAN} $shell${NC}"
-    "${RED}DE${NC}:${BLUE} $de${NC}"
-    "${RED}CPU${NC}:${GREEN} $cpu${NC}"
-    "${RED}Memory${NC}:${BLUE} $memory${NC}"
-    "${RED}GPU${NC}:${PURPLE} $gpu${NC}"
-    "${RED}Disk${NC}:${RED} $disk${NC}"
-    "${RED}Battery${NC}:${RED} $battery${NC}"
-    "${RED}Local IP${NC}:${CYAN} $local_ip${NC}"
-    "${RED}Locale${NC}:${CYAN} $locale${NC}"
+    "$(format_info "OS" "$os" "$GREEN")"
+    "$(format_info "Host" "$host" "$CYAN")"
+    "$(format_info "Kernel" "$kernel" "$PURPLE")"
+    "$(format_info "Uptime" "$uptime" "$YELLOW")"
+    "$(format_info "Packages" "$packages" "$PURPLE")"
+    "$(format_info "Shell" "$shell" "$CYAN")"
+    "$(format_info "DE" "$de" "$BLUE")"
+    "$(format_info "CPU" "$cpu" "$GREEN")"
+    "$(format_info "Memory" "$memory" "$BLUE")"
+    "$(format_info "GPU" "$gpu" "$PURPLE")"
+    "$(format_info "Disk" "$disk" "$RED")"
+    "$(format_info "Battery" "$battery" "$RED")"
+    "$(format_info "Local IP" "$local_ip" "$CYAN")"
+    "$(format_info "Locale" "$locale" "$CYAN")"
 )
 
-# Print everything with proper padding
-echo # Add top padding
+# Print output
+echo # Top padding
 
-# Get the maximum number of lines
+# Get maximum lines
 max_lines=$(( ${#ascii_art[@]} > ${#info_lines[@]} ? ${#ascii_art[@]} : ${#info_lines[@]} ))
 
-# Print ASCII and info side by side with fixed padding
+# Create padding string for between ASCII and info
+pad_string=$(printf "%${PAD_BETWEEN}s" "")
+
+# Print each line
 for ((i = 0; i < max_lines; i++)); do
-    # Print ASCII art (in red) if available, otherwise empty space
+    # Print ASCII art line (or padding if beyond ASCII art)
     if ((i < ${#ascii_art[@]})); then
-        printf "${RED}%s" "${ascii_art[i]}"
+        printf "${RED}%s${NC}" "${ascii_art[i]}"
     else
-        printf "%*s" "$ASCII_WIDTH" ""
+        printf "%${ASCII_WIDTH}s" ""
     fi
-    
-    # Add fixed padding between ASCII and info
-    printf "%*s" "$RIGHT_PADDING" ""
-    
+
+    # Print padding between ASCII and info
+    printf "%s" "$pad_string"
+
     # Print info line if available
     if ((i < ${#info_lines[@]})); then
         printf "%s" "${info_lines[i]}"
     fi
-    
+
     printf "\n"
 done
 
-echo # Add bottom padding
+echo # Bottom padding
