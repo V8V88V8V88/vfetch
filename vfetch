@@ -1,5 +1,6 @@
 #!/bin/bash
-# Colors (using tput is more reliable for formatting)
+
+# Colors (using tput for reliability)
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
 YELLOW=$(tput setaf 3)
@@ -8,35 +9,34 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
-# Function to print padded info
+# Function to print info with proper padding and formatting
 print_info() {
-    printf "%-45s %s\n" "$1" "$2"
+    printf "%s%s%s%s%s%s\n" "$RED" "$1" "${NC}" "${2:+:  }" "${2:-}" "${NC}"
 }
 
-# Store the ASCII art in an array
+# Define the ASCII art as a here document (ensuring it's in gray/white)
 readarray -t ascii_art << "EOF"
-${RED}
 ██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
 ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
 ██║   ██║█████╗  █████╗     ██║   ██║     ███████║
 ╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║
  ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║
-  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝${NC}
+  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
 EOF
 
-# Get system information
-os="${GREEN}$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)${NC}"
-host="${CYAN}$(hostname)${NC}"
-kernel="${PURPLE}$(uname -r)${NC}"
-uptime="${YELLOW}$(uptime -p | sed 's/up //')${NC}"
-packages="${PURPLE}$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)${NC}"
-shell="${CYAN}$(basename $SHELL)${NC}"
-de="${BLUE}$XDG_CURRENT_DESKTOP${NC}"
+# Get system information with improved formatting
+os=$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)
+host=$(hostname)
+kernel=$(uname -r)
+uptime=$(uptime -p | sed 's/up //')
+packages="$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)"
+shell=$(basename "$SHELL")
+de="$XDG_CURRENT_DESKTOP"
 
-# CPU info
+# CPU info with better formatting
 IFS=':' read -r _ cpu_model < <(grep "model name" /proc/cpuinfo | head -1)
 cpu_cores=$(grep -c ^processor /proc/cpuinfo)
-cpu="${GREEN}${cpu_model} ($cpu_cores)${NC}"
+cpu="${cpu_model# } ($cpu_cores)"
 
 # Memory info
 while read -r line; do
@@ -46,50 +46,60 @@ while read -r line; do
     esac
 done < /proc/meminfo
 used=$((total-avail))
-memory="${BLUE}${used}MB / ${total}MB${NC}"
+memory="${used}MB / ${total}MB"
 
-# GPU info
-gpu="${PURPLE}$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')${NC}"
+# GPU info with cleaner output
+gpu=$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')
 
 # Disk info
-read -r _ _ used total used_percent _ <<< "$(df -h / | awk 'NR==2{print $3,$2,$5}')"
-disk="${RED}$used/$total ($used_percent)${NC}"
+read -r _ used total used_percent _ <<< "$(df -h / | awk 'NR==2{print $3,$2,$5}')"
+disk="$used/$total ($used_percent)"
 
-# Battery info
+# Battery info with improved formatting
 if [ -d "/sys/class/power_supply/BAT0" ]; then
     bat_status=$(< /sys/class/power_supply/BAT0/status)
     bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
-    battery="${RED}$bat_percent% ($bat_status)${NC}"
+    battery="$bat_percent% ($bat_status)"
 fi
 
-# Store system info in array
+# Local IP and Locale
+local_ip=$(hostname -I | cut -d' ' -f1)
+locale="$LANG"
+
+# Create formatted info array
 readarray -t sys_info << EOF
-OS: $os
-Host: $host
-Kernel: $kernel
-Uptime: $uptime
-Packages: $packages
-Shell: $shell
-DE: $de
-CPU: $cpu
-Memory: $memory
-GPU: $gpu
-Disk: $disk
-Battery: $battery
-Local IP: ${CYAN}$(hostname -I | cut -d' ' -f1)${NC}
-Locale: ${CYAN}$LANG${NC}
+$(print_info "OS" "${GREEN}${os}")
+$(print_info "Host" "${CYAN}${host}")
+$(print_info "Kernel" "${PURPLE}${kernel}")
+$(print_info "Uptime" "${YELLOW}${uptime}")
+$(print_info "Packages" "${PURPLE}${packages}")
+$(print_info "Shell" "${CYAN}${shell}")
+$(print_info "DE" "${BLUE}${de}")
+$(print_info "CPU" "${GREEN}${cpu}")
+$(print_info "Memory" "${BLUE}${memory}")
+$(print_info "GPU" "${PURPLE}${gpu}")
+$(print_info "Disk" "${RED}${disk}")
+$(print_info "Battery" "${RED}${battery}")
+$(print_info "Local IP" "${CYAN}${local_ip}")
+$(print_info "Locale" "${CYAN}${locale}")
 EOF
 
-# Print ASCII art and system info side by side
+# Print ASCII art and system info side by side with improved padding
 max_length=${#ascii_art[@]}
-if [[ ${#sys_info[@]} -gt $max_length ]]; then
-    max_length=${#sys_info[@]}
-fi
+[[ ${#sys_info[@]} -gt $max_length ]] && max_length=${#sys_info[@]}
 
+# Add some padding at the top
 echo
+
+# Print each line with proper padding
 for ((i=0; i<max_length; i++)); do
-    ascii_line="${ascii_art[$i]:-}"
-    info_line="${sys_info[$i]:-}"
-    printf "%-65s%s\n" "$ascii_line" "$info_line"
+    # Print the ASCII art in red with proper padding for info
+    if [ -n "${ascii_art[$i]:-}" ]; then
+        printf "${RED}%-80s${NC}%s\n" "${ascii_art[$i]}" "${sys_info[$i]:-}"
+    else
+        printf "%-80s%s\n" "" "${sys_info[$i]:-}"
+    fi
 done
+
+# Add some padding at the bottom
 echo
