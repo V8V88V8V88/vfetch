@@ -9,17 +9,16 @@ PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
 
-# Fixed padding values
+# Padding settings
 ASCII_WIDTH=45      # Width of ASCII art
-PAD_BETWEEN=20     # Padding between ASCII and info
-LABEL_WIDTH=15     # Width for labels
+PAD_BETWEEN=5       # Padding between ASCII art and system info
+LABEL_WIDTH=12      # Fixed width for labels
 
-# Function to create uniform info line
+# Function to create uniform info display
 format_info() {
     local label="$1"
     local value="$2"
-    local color="$3"
-    printf "${RED}%-${LABEL_WIDTH}s${NC}%s ${color}%s${NC}" "$label" ":" "$value"
+    printf "%-${LABEL_WIDTH}s: %s\n" "${RED}${label}${NC}" "${CYAN}${value}${NC}"
 }
 
 # Store ASCII art
@@ -40,14 +39,14 @@ os=$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)
 host=$(hostname)
 kernel=$(uname -r)
 uptime=$(uptime -p | sed 's/up //')
-packages="$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)"
+packages="$(rpm -qa | wc -l) rpm, $(flatpak list 2>/dev/null | wc -l) flatpak"
 shell=$(basename "$SHELL")
 de="$XDG_CURRENT_DESKTOP"
 
 # CPU info
 IFS=':' read -r _ cpu_model < <(grep "model name" /proc/cpuinfo | head -1)
 cpu_cores=$(grep -c ^processor /proc/cpuinfo)
-cpu="${cpu_model# } ($cpu_cores)"
+cpu="${cpu_model# } ($cpu_cores cores)"
 
 # Memory info
 while read -r line; do
@@ -74,51 +73,25 @@ fi
 local_ip=$(hostname -I | cut -d' ' -f1)
 locale="$LANG"
 
-# Create info array with consistent formatting
-declare -a info_lines=(
-    "$(format_info "OS" "$os" "$GREEN")"
-    "$(format_info "Host" "$host" "$CYAN")"
-    "$(format_info "Kernel" "$kernel" "$PURPLE")"
-    "$(format_info "Uptime" "$uptime" "$YELLOW")"
-    "$(format_info "Packages" "$packages" "$PURPLE")"
-    "$(format_info "Shell" "$shell" "$CYAN")"
-    "$(format_info "DE" "$de" "$BLUE")"
-    "$(format_info "CPU" "$cpu" "$GREEN")"
-    "$(format_info "Memory" "$memory" "$BLUE")"
-    "$(format_info "GPU" "$gpu" "$PURPLE")"
-    "$(format_info "Disk" "$disk" "$RED")"
-    "$(format_info "Battery" "$battery" "$RED")"
-    "$(format_info "Local IP" "$local_ip" "$CYAN")"
-    "$(format_info "Locale" "$locale" "$CYAN")"
-)
-
-# Print output
+# Print ASCII art
 echo # Top padding
-
-# Get maximum lines
-max_lines=$(( ${#ascii_art[@]} > ${#info_lines[@]} ? ${#ascii_art[@]} : ${#info_lines[@]} ))
-
-# Create padding string for between ASCII and info
-pad_string=$(printf "%${PAD_BETWEEN}s" "")
-
-# Print each line
-for ((i = 0; i < max_lines; i++)); do
-    # Print ASCII art line (or padding if beyond ASCII art)
-    if ((i < ${#ascii_art[@]})); then
-        printf "${RED}%s${NC}" "${ascii_art[i]}"
-    else
-        printf "%${ASCII_WIDTH}s" ""
-    fi
-
-    # Print padding between ASCII and info
-    printf "%s" "$pad_string"
-
-    # Print info line if available
-    if ((i < ${#info_lines[@]})); then
-        printf "%s" "${info_lines[i]}"
-    fi
-
-    printf "\n"
+for line in "${ascii_art[@]}"; do
+    printf "${RED}%s${NC}\n" "$line"
 done
+echo # Separator
 
-echo # Bottom padding
+# Print system information in a straight column
+format_info "OS" "$os"
+format_info "Host" "$host"
+format_info "Kernel" "$kernel"
+format_info "Uptime" "$uptime"
+format_info "Packages" "$packages"
+format_info "Shell" "$shell"
+format_info "DE" "$de"
+format_info "CPU" "$cpu"
+format_info "Memory" "$memory"
+format_info "GPU" "$gpu"
+format_info "Disk" "$disk"
+format_info "Battery" "${battery:-N/A}"
+format_info "Local IP" "$local_ip"
+format_info "Locale" "$locale"
