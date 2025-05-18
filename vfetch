@@ -7,20 +7,13 @@ YELLOW=$(tput setaf 3)
 BLUE=$(tput setaf 4)
 PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
+WHITE=$(tput setaf 7)
+BOLD=$(tput bold)
 NC=$(tput sgr0)
 
 # Fixed padding values
-ASCII_WIDTH=45      # Width of ASCII art
-PAD_BETWEEN=20     # Padding between ASCII and info
-LABEL_WIDTH=15     # Width for labels
-
-# Function to create uniform info line
-format_info() {
-    local label="$1"
-    local value="$2"
-    local color="$3"
-    printf "${RED}%-${LABEL_WIDTH}s${NC}%s ${color}%s${NC}" "$label" ":" "$value"
-}
+ASCII_WIDTH=50      # Width of ASCII art
+LABEL_WIDTH=10      # Width for labels
 
 # Store ASCII art
 read -r -d '' ASCII_ART << "EOF"
@@ -69,56 +62,52 @@ if [ -d "/sys/class/power_supply/BAT0" ]; then
     bat_status=$(< /sys/class/power_supply/BAT0/status)
     bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
     battery="$bat_percent% ($bat_status)"
+else
+    battery="N/A"
 fi
 
 local_ip=$(hostname -I | cut -d' ' -f1)
 locale="$LANG"
 
-# Create info array with consistent formatting
-declare -a info_lines=(
-    "$(format_info "OS" "$os" "$GREEN")"
-    "$(format_info "Host" "$host" "$CYAN")"
-    "$(format_info "Kernel" "$kernel" "$PURPLE")"
-    "$(format_info "Uptime" "$uptime" "$YELLOW")"
-    "$(format_info "Packages" "$packages" "$PURPLE")"
-    "$(format_info "Shell" "$shell" "$CYAN")"
-    "$(format_info "DE" "$de" "$BLUE")"
-    "$(format_info "CPU" "$cpu" "$GREEN")"
-    "$(format_info "Memory" "$memory" "$BLUE")"
-    "$(format_info "GPU" "$gpu" "$PURPLE")"
-    "$(format_info "Disk" "$disk" "$RED")"
-    "$(format_info "Battery" "$battery" "$RED")"
-    "$(format_info "Local IP" "$local_ip" "$CYAN")"
-    "$(format_info "Locale" "$locale" "$CYAN")"
+# Create arrays for labels and values
+declare -a labels=(
+    "OS" "Host" "Kernel" "Uptime" "Packages" "Shell" "DE" "CPU"
+    "Memory" "GPU" "Disk" "Battery" "Local IP" "Locale"
 )
 
-# Print output
-echo # Top padding
+declare -a values=(
+    "$os" "$host" "$kernel" "$uptime" "$packages" "$shell" "$de" "$cpu"
+    "$memory" "$gpu" "$disk" "$battery" "$local_ip" "$locale"
+)
 
-# Get maximum lines
-max_lines=$(( ${#ascii_art[@]} > ${#info_lines[@]} ? ${#ascii_art[@]} : ${#info_lines[@]} ))
+# Colors for each value
+declare -a colors=(
+    "$GREEN" "$CYAN" "$PURPLE" "$YELLOW" "$PURPLE" "$CYAN" "$BLUE" "$GREEN"
+    "$BLUE" "$PURPLE" "$RED" "$YELLOW" "$CYAN" "$CYAN"
+)
 
-# Create padding string for between ASCII and info
-pad_string=$(printf "%${PAD_BETWEEN}s" "")
+# Print top padding
+echo
+
+# Determine maximum lines to print
+max_lines=$(( ${#ascii_art[@]} > ${#labels[@]} ? ${#ascii_art[@]} : ${#labels[@]} ))
 
 # Print each line
 for ((i = 0; i < max_lines; i++)); do
-    # Print ASCII art line (or padding if beyond ASCII art)
+    # Print ASCII art or padding
     if ((i < ${#ascii_art[@]})); then
-        printf "${RED}%s${NC}" "${ascii_art[i]}"
+        printf "${RED}%-${ASCII_WIDTH}s${NC}" "${ascii_art[i]}"
     else
-        printf "%${ASCII_WIDTH}s" ""
+        printf "%-${ASCII_WIDTH}s" ""
     fi
-
-    # Print padding between ASCII and info
-    printf "%s" "$pad_string"
-
+    
     # Print info line if available
-    if ((i < ${#info_lines[@]})); then
-        printf "%s" "${info_lines[i]}"
+    if ((i < ${#labels[@]})); then
+        printf "${RED}%-12s${NC}: ${colors[i]}%s${NC}" "${labels[i]}" "${values[i]}"
     fi
-
-    printf "\n"
+    
+    echo
 done
 
-echo # Bottom padding
+# Print bottom padding
+echo
