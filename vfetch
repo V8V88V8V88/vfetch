@@ -4,109 +4,108 @@
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
 YELLOW=$(tput setaf 3)
+BRIGHT_YELLOW=$(tput bold)$(tput setaf 3)  # Bright yellow (bold yellow)
 BLUE=$(tput setaf 4)
 PURPLE=$(tput setaf 5)
 CYAN=$(tput setaf 6)
-WHITE=$(tput setaf 7)
-BOLD=$(tput bold)
 NC=$(tput sgr0)
+
+# Get terminal width
+TERM_WIDTH=$(tput cols)
 
 # Fixed padding values
 ASCII_WIDTH=50      # Width of ASCII art
-LABEL_WIDTH=10      # Width for labels
+SPACE_PADDING=4   # Additional space between ASCII and text
+LABEL_WIDTH=12      # Width for labels
+RIGHT_MARGIN=2      # Avoid text reaching edge of terminal
 
-# Store ASCII art
-read -r -d '' ASCII_ART << "EOF"
-██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
+# No longer need truncation
+
+# ASCII art as a string (hardcoded for performance)
+ASCII_ART="██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
 ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
 ██║   ██║█████╗  █████╗     ██║   ██║     ███████║
 ╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║
  ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║
-  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
-EOF
+  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝"
+
+# Get system information - all commands optimized for speed
+os=$(grep -o 'PRETTY_NAME=".*"' /etc/os-release | cut -d'"' -f2)
+host=$(hostname)
+kernel=$(uname -r)
+uptime=$(uptime -p | sed 's/up //')
+shell=$(basename "$SHELL")
+
+# Get desktop environment with version for GNOME
+de="$XDG_CURRENT_DESKTOP"
+if [[ "$de" == *"GNOME"* ]]; then
+    # Try to get GNOME version
+    gnome_version=$(gnome-shell --version 2>/dev/null | grep -oP '[\d\.]+' || echo "")
+    if [[ -n "$gnome_version" ]]; then
+        de="$de $gnome_version"
+    fi
+fi
+
+# Package counts - direct command, faster than the previous method
+rpm_count=$(rpm -qa 2>/dev/null | wc -l)
+flatpak_count=$(flatpak list 2>/dev/null | wc -l)
+packages="$rpm_count (rpm), $flatpak_count (flatpak)"
+
+# CPU info - faster method
+cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d':' -f2 | sed 's/^[ \t]*//')
+cpu_cores=$(grep -c ^processor /proc/cpuinfo)
+cpu="$cpu_model ($cpu_cores)"
+
+# Memory info - direct calculation
+mem_info=$(grep -E 'MemTotal|MemAvailable' /proc/meminfo)
+mem_total=$(echo "$mem_info" | grep MemTotal | awk '{print int($2/1024)}')
+mem_available=$(echo "$mem_info" | grep MemAvailable | awk '{print int($2/1024)}')
+mem_used=$((mem_total - mem_available))
+memory="${mem_used}MB / ${mem_total}MB"
+
+# GPU info - faster grep
+gpu=$(lspci | grep -m1 -i 'vga\|3d\|display' | sed 's/.*: //')
+
+# Disk info - single df call
+df_output=$(df -h / | awk 'NR==2{print $3"/"$2" ("$5")"}')
+disk="$df_output"
+
+# Battery info - faster cat
+battery="N/A"
+if [ -d "/sys/class/power_supply/BAT0" ]; then
+    bat_status=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null)
+    bat_percent=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null)
+    [ -n "$bat_percent" ] && battery="$bat_percent% ($bat_status)"
+fi
+
+# Network and locale - faster
+local_ip=$(hostname -I | awk '{print $1}')
+locale="$LANG"
+
+# Using full values without truncation
 
 # Convert ASCII art to array
 mapfile -t ascii_art <<< "$ASCII_ART"
 
-# Get system information
-os=$(sed -n 's/PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)
-host=$(hostname)
-kernel=$(uname -r)
-uptime=$(uptime -p | sed 's/up //')
-packages="$(rpm -qa | wc -l) (rpm), $(flatpak list 2>/dev/null | wc -l) (flatpak)"
-shell=$(basename "$SHELL")
-de="$XDG_CURRENT_DESKTOP"
+# Create padding string
+PADDING_STR=$(printf '%*s' "$SPACE_PADDING" '')
 
-# CPU info
-IFS=':' read -r _ cpu_model < <(grep "model name" /proc/cpuinfo | head -1)
-cpu_cores=$(grep -c ^processor /proc/cpuinfo)
-cpu="${cpu_model# } ($cpu_cores)"
-
-# Memory info
-while read -r line; do
-    case $line in
-        *MemTotal:*) total=$((${line##* }/1024));;
-        *MemAvailable:*) avail=$((${line##* }/1024));;
-    esac
-done < /proc/meminfo
-used=$((total-avail))
-memory="${used}MB / ${total}MB"
-
-# GPU and other info
-gpu=$(lspci | grep -i 'vga\|3d\|display' | sed 's/.*: //')
-read -r _ used total used_percent _ <<< "$(df -h / | awk 'NR==2{print $3,$2,$5}')"
-disk="$used/$total ($used_percent)"
-
-# Battery info
-if [ -d "/sys/class/power_supply/BAT0" ]; then
-    bat_status=$(< /sys/class/power_supply/BAT0/status)
-    bat_percent=$(< /sys/class/power_supply/BAT0/capacity)
-    battery="$bat_percent% ($bat_status)"
-else
-    battery="N/A"
-fi
-
-local_ip=$(hostname -I | cut -d' ' -f1)
-locale="$LANG"
-
-# Create arrays for labels and values
-declare -a labels=(
-    "OS" "Host" "Kernel" "Uptime" "Packages" "Shell" "DE" "CPU"
-    "Memory" "GPU" "Disk" "Battery" "Local IP" "Locale"
-)
-
-declare -a values=(
-    "$os" "$host" "$kernel" "$uptime" "$packages" "$shell" "$de" "$cpu"
-    "$memory" "$gpu" "$disk" "$battery" "$local_ip" "$locale"
-)
-
-# Colors for each value
-declare -a colors=(
-    "$GREEN" "$CYAN" "$PURPLE" "$YELLOW" "$PURPLE" "$CYAN" "$BLUE" "$GREEN"
-    "$BLUE" "$PURPLE" "$RED" "$YELLOW" "$CYAN" "$CYAN"
-)
+# Labels and values
+labels=("OS" "Host" "Kernel" "Uptime" "Packages" "Shell" "DE" "CPU" "Memory" "GPU" "Disk" "Battery" "Local IP" "Locale")
+values=("$os" "$host" "$kernel" "$uptime" "$packages" "$shell" "$de" "$cpu" "$memory" "$gpu" "$disk" "$battery" "$local_ip" "$locale")
+colors=("$GREEN" "$CYAN" "$PURPLE" "$YELLOW" "$PURPLE" "$CYAN" "$BLUE" "$GREEN" "$BLUE" "$PURPLE" "$RED" "$YELLOW" "$CYAN" "$CYAN")
 
 # Print top padding
 echo
 
-# Determine maximum lines to print
-max_lines=$(( ${#ascii_art[@]} > ${#labels[@]} ? ${#ascii_art[@]} : ${#labels[@]} ))
+# Print each line efficiently
+for ((i = 0; i < 6; i++)); do
+    printf "${BRIGHT_YELLOW}%-${ASCII_WIDTH}s${NC}${PADDING_STR}${RED}%-12s${NC}: %b%s${NC}\n" "${ascii_art[i]}" "${labels[i]}" "${colors[i]}" "${values[i]}"
+done
 
-# Print each line
-for ((i = 0; i < max_lines; i++)); do
-    # Print ASCII art or padding
-    if ((i < ${#ascii_art[@]})); then
-        printf "${RED}%-${ASCII_WIDTH}s${NC}" "${ascii_art[i]}"
-    else
-        printf "%-${ASCII_WIDTH}s" ""
-    fi
-    
-    # Print info line if available
-    if ((i < ${#labels[@]})); then
-        printf "${RED}%-12s${NC}: ${colors[i]}%s${NC}" "${labels[i]}" "${values[i]}"
-    fi
-    
-    echo
+# Print remaining lines
+for ((i = 6; i < ${#labels[@]}; i++)); do
+    printf "%-${ASCII_WIDTH}s${PADDING_STR}${RED}%-12s${NC}: %b%s${NC}\n" "" "${labels[i]}" "${colors[i]}" "${values[i]}"
 done
 
 # Print bottom padding
