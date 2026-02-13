@@ -29,17 +29,44 @@ vfetch is a bash script that provides a colorful and informative display of syst
   - `lspci`
   - `df`
 
+## Installation
+
+**From the script** (installs to `/usr/local/bin`):
+
+```bash
+./vfetch --install
+# or
+./vfetch -i
+```
+
+**Uninstall:**
+
+```bash
+./vfetch --uninstall
+# or
+./vfetch -u
+```
+
+**Using Make** (optional):
+
+```bash
+sudo make install          # install to /usr/local/bin
+sudo make uninstall        # remove
+
+# or user-only (no sudo):
+make install PREFIX=$$HOME/.local
+make uninstall PREFIX=$$HOME/.local
+```
+
+Ensure `~/.local/bin` is in your PATH if you use the user-only install.
+
 ## Usage
 
-1. Save the script as `vfetch.sh`.
-2. Make the script executable:
-   ```
-   chmod +x vfetch.sh
-   ```
-3. Run the script:
-   ```
-   ./vfetch.sh
-   ```
+```bash
+vfetch
+```
+
+Or from the repo: `./vfetch` (run without args to show system info)
 
 ## Customization
 

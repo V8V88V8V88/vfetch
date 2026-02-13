@@ -1,5 +1,18 @@
 #!/bin/bash
 
+case "${1:-}" in
+  -i|--install)
+    self=$(realpath "$0" 2>/dev/null)
+    [[ -z "$self" ]] && { self=$(cd "$(dirname "$0")" && pwd); self="${self}/$(basename "$0")"; }
+    sudo install -m 755 "$self" /usr/local/bin/vfetch && echo "vfetch installed to /usr/local/bin/vfetch"
+    exit 0
+    ;;
+  -u|--uninstall)
+    sudo rm -f /usr/local/bin/vfetch && echo "vfetch uninstalled from /usr/local/bin"
+    exit 0
+    ;;
+esac
+
 NC=$(tput sgr0)
 LBL=$(tput setaf 252)
 AC=$(tput setaf 38)
@@ -22,7 +35,7 @@ C_LOCALE=$(tput setaf 245)
 
 TERM_WIDTH=$(tput cols)
 LABEL_WIDTH=12
-BOX_PAD=8
+BOX_PAD=4
 BOX_WIDTH=$((TERM_WIDTH - BOX_PAD))
 CONTENT_W=$((BOX_WIDTH - 2))
 VALUE_MAX=$((CONTENT_W - 16))
@@ -127,22 +140,15 @@ done
 
 echo
 printf "${BOX}"
-printf "+%*s+\n" $((BOX_WIDTH-2)) "" | tr ' ' '-'
+printf "┌%*s┐\n" $((BOX_WIDTH-2)) "" | tr ' ' '-'
+LEFT_PAD=4
 while IFS= read -r line; do
-    [[ ${#line} -gt $((CONTENT_W - 2)) ]] && line="${line:0:$((CONTENT_W - 2))}"
-    pad=$((CONTENT_W - 2 - ${#line}))
-    [[ $pad -lt 0 ]] && pad=0
-    printf "${BOX}| ${NC}"
-    printf "${AC}%s${NC}" "$line"
-    printf "${NC}%*s${BOX}|${NC}\n" "$pad" ""
+    printf "%*s${AC}%s${NC}\n" "$LEFT_PAD" "" "$line"
 done <<< "$BANNER"
-printf "${BOX}|%*s|${NC}\n" $((BOX_WIDTH-2)) ""
+echo
 for ((i = 0; i < ${#labels[@]}; i++)); do
-    pad=$((VALUE_MAX - ${#values[i]}))
-    [[ $pad -lt 0 ]] && pad=0
-    printf "${BOX}| ${NC}"
-    printf "${LBL}%-${LABEL_WIDTH}s${NC}: %b%s${NC}" "${labels[i]}" "${colors[i]}" "${values[i]}"
-    printf "${NC}%*s${BOX}|${NC}\n" "$pad" ""
+    printf "%*s${LBL}%-${LABEL_WIDTH}s${NC}: %b%s${NC}\n" "$LEFT_PAD" "" "${labels[i]}" "${colors[i]}" "${values[i]}"
 done
-printf "${BOX}+%*s+${NC}\n" $((BOX_WIDTH-2)) "" | tr ' ' '-'
+echo
+printf "${BOX}└%*s┘${NC}\n" $((BOX_WIDTH-2)) "" | tr ' ' '-'
 echo
