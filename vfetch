@@ -1,150 +1,148 @@
 #!/bin/bash
 
-# Colors (using tput for reliability)
-RED=$(tput setaf 1)
-GREEN=$(tput setaf 2)
-YELLOW=$(tput setaf 3)
-BRIGHT_YELLOW=$(tput bold)$(tput setaf 3)  # Bright yellow (bold yellow)
-BLUE=$(tput setaf 4)
-PURPLE=$(tput setaf 5)
-CYAN=$(tput setaf 6)
 NC=$(tput sgr0)
+LBL=$(tput setaf 252)
+AC=$(tput setaf 38)
+BOX=$(tput setaf 245)
+C_OS=$(tput setaf 39)
+C_HW=$(tput setaf 38)
+C_HOST=$(tput setaf 245)
+C_CORE=$(tput setaf 208)
+C_TIME=$(tput setaf 76)
+C_PKG=$(tput setaf 141)
+C_ENV=$(tput setaf 39)
+C_DE=$(tput setaf 99)
+C_CPU=$(tput setaf 208)
+C_MEM=$(tput setaf 39)
+C_GPU=$(tput setaf 141)
+C_DISK=$(tput setaf 215)
+C_BAT=$(tput setaf 76)
+C_NET=$(tput setaf 38)
+C_LOCALE=$(tput setaf 245)
 
-# Get terminal width
 TERM_WIDTH=$(tput cols)
+LABEL_WIDTH=12
+BOX_PAD=8
+BOX_WIDTH=$((TERM_WIDTH - BOX_PAD))
+CONTENT_W=$((BOX_WIDTH - 2))
+VALUE_MAX=$((CONTENT_W - 16))
+[[ $VALUE_MAX -lt 4 ]] && VALUE_MAX=4
 
-# Fixed padding values
-ASCII_WIDTH=50      # Width of ASCII art
-SPACE_PADDING=4   # Additional space between ASCII and text
-LABEL_WIDTH=12      # Width for labels
-RIGHT_MARGIN=2      # Avoid text reaching edge of terminal
+BANNER='       ___    __      __ 
+ _  __/ _/__ / /_____/ / 
+| |/ / _/ -_) __/ __/ _ \
+|___/_/ \__/\__/\__/_//_/
+                         '
 
-# No longer need truncation
+TMPD="${TMPDIR:-/tmp}/vfetch.$$"
+mkdir -p "$TMPD"
 
-# ASCII art as a string (hardcoded for performance)
-ASCII_ART="██╗   ██╗███████╗███████╗████████╗ ██████╗██╗  ██╗
-██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██║  ██║
-██║   ██║█████╗  █████╗     ██║   ██║     ███████║
-╚██╗ ██╔╝██╔══╝  ██╔══╝     ██║   ██║     ██╔══██║
- ╚████╔╝ ██║     ███████╗   ██║   ╚██████╗██║  ██║
-  ╚═══╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝"
+(rpm -qa 2>/dev/null | wc -l) > "$TMPD/rpm" &
+(flatpak list 2>/dev/null | wc -l) > "$TMPD/flatpak" &
+(gnome-shell --version 2>/dev/null | grep -oP '[\d\.]+' || true) > "$TMPD/gnome" &
+(lspci 2>/dev/null | grep -m1 -i 'vga\|3d\|display' | sed 's/.*: //' || true) > "$TMPD/gpu" &
+(hostname -I 2>/dev/null | awk '{print $1}' || true) > "$TMPD/ip" &
+if command -v wmctrl >/dev/null 2>&1; then
+    (wmctrl -m 2>/dev/null | grep "Name:" | cut -d' ' -f2- || true) > "$TMPD/wm" &
+else
+    (xprop -root -notype _NET_WM_NAME 2>/dev/null | sed -e 's/^.*= "\(.*\)"$/\1/' || true) > "$TMPD/wm" &
+fi
 
-# Get system information - all commands optimized for speed
-os=$(grep -o 'PRETTY_NAME=".*"' /etc/os-release | cut -d'"' -f2)
+os=$(grep -o 'PRETTY_NAME=".*"' /etc/os-release 2>/dev/null | cut -d'"' -f2)
 host=$(hostname)
 kernel=$(uname -r)
-uptime=$(uptime -p | sed 's/up //')
+uptime=$(uptime -p 2>/dev/null | sed 's/up //')
 shell=$(basename "$SHELL")
 
-# Get desktop environment with version for GNOME
 de="$XDG_CURRENT_DESKTOP"
-if [[ "$de" == *"GNOME"* ]]; then
-    # Try to get GNOME version
-    gnome_version=$(gnome-shell --version 2>/dev/null | grep -oP '[\d\.]+' || echo "")
-    if [[ -n "$gnome_version" ]]; then
-        de="$de $gnome_version"
-    fi
-fi
-
-# Get Window Manager info
-wm="Unknown"
-if [[ "$XDG_CURRENT_DESKTOP" == *"GNOME"* ]]; then
-    # GNOME's window manager is Mutter
-    wm="Mutter"
-elif [[ "$XDG_CURRENT_DESKTOP" == *"KDE"* ]]; then
-    wm="KWin"
-elif [[ "$XDG_CURRENT_DESKTOP" == *"Xfce"* ]]; then
-    wm="Xfwm4"
-elif command -v wmctrl >/dev/null 2>&1; then
-    wm=$(wmctrl -m 2>/dev/null | grep "Name:" | cut -d' ' -f2- || echo "Unknown")
-elif [[ -n "$DISPLAY" ]]; then
-    # Try to get window manager from property
-    wm=$(xprop -root -notype _NET_WM_NAME 2>/dev/null | sed -e 's/^.*= "\(.*\)"$/\1/' || echo "Unknown")
-fi
-
-# Detect display server (Wayland or X11)
 display_server="Unknown"
-if [[ -n "$WAYLAND_DISPLAY" ]]; then
-    display_server="Wayland"
-elif [[ -n "$DISPLAY" ]]; then
-    display_server="X11"
-fi
+[[ -n "$WAYLAND_DISPLAY" ]] && display_server="Wayland"
+[[ -n "$DISPLAY" && -z "$WAYLAND_DISPLAY" ]] && display_server="X11"
 
-# Get PC/Laptop Model
 model="Unknown"
-if [ -f /sys/devices/virtual/dmi/id/product_name ]; then
+if [[ -f /sys/devices/virtual/dmi/id/product_name ]]; then
     product_name=$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null)
     product_version=$(cat /sys/devices/virtual/dmi/id/product_version 2>/dev/null)
-    if [[ -n "$product_name" ]]; then
-        model="$product_name"
-        [[ -n "$product_version" ]] && model="$model $product_version"
-    fi
-elif [ -f /sys/firmware/devicetree/base/model ]; then
-    # For ARM devices like Raspberry Pi
+    [[ -n "$product_name" ]] && model="$product_name"
+    [[ -n "$product_version" ]] && model="$model $product_version"
+elif [[ -f /sys/firmware/devicetree/base/model ]]; then
     model=$(cat /sys/firmware/devicetree/base/model 2>/dev/null)
 fi
 
-# Package counts - direct command, faster than the previous method
-rpm_count=$(rpm -qa 2>/dev/null | wc -l)
-flatpak_count=$(flatpak list 2>/dev/null | wc -l)
-packages="$rpm_count (rpm), $flatpak_count (flatpak)"
-
-# CPU info - faster method
-cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d':' -f2 | sed 's/^[ \t]*//')
-cpu_cores=$(grep -c ^processor /proc/cpuinfo)
+cpu_model=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | sed 's/^[ \t]*//')
+cpu_cores=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 0)
 cpu="$cpu_model ($cpu_cores)"
 
-# Memory info - direct calculation
-mem_info=$(grep -E 'MemTotal|MemAvailable' /proc/meminfo)
+mem_info=$(grep -E 'MemTotal|MemAvailable' /proc/meminfo 2>/dev/null)
 mem_total=$(echo "$mem_info" | grep MemTotal | awk '{print int($2/1024)}')
 mem_available=$(echo "$mem_info" | grep MemAvailable | awk '{print int($2/1024)}')
 mem_used=$((mem_total - mem_available))
 memory="${mem_used}MB / ${mem_total}MB"
 
-# GPU info - faster grep
-gpu=$(lspci | grep -m1 -i 'vga\|3d\|display' | sed 's/.*: //')
-
-# Disk info - single df call
-df_output=$(df -h / | awk 'NR==2{print $3"/"$2" ("$5")"}')
+df_output=$(df -h / 2>/dev/null | awk 'NR==2{print $3"/"$2" ("$5")"}')
 disk="$df_output"
 
-# Battery info - faster cat
 battery="N/A"
-if [ -d "/sys/class/power_supply/BAT0" ]; then
+if [[ -d /sys/class/power_supply/BAT0 ]]; then
     bat_status=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null)
     bat_percent=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null)
-    [ -n "$bat_percent" ] && battery="$bat_percent% ($bat_status)"
+    [[ -n "$bat_percent" ]] && battery="$bat_percent% ($bat_status)"
 fi
 
-# Network and locale - faster
-local_ip=$(hostname -I | awk '{print $1}')
-locale="$LANG"
+locale="${LANG:-}"
 
-# Using full values without truncation
+wait
+rpm_count=$(cat "$TMPD/rpm" 2>/dev/null || echo 0)
+flatpak_count=$(cat "$TMPD/flatpak" 2>/dev/null || echo 0)
+packages="$rpm_count (rpm), $flatpak_count (flatpak)"
 
-# Convert ASCII art to array
-mapfile -t ascii_art <<< "$ASCII_ART"
+[[ "$de" == *"GNOME"* ]] && { gnome_version=$(cat "$TMPD/gnome" 2>/dev/null); [[ -n "$gnome_version" ]] && de="$de $gnome_version"; }
 
-# Create padding string
-PADDING_STR=$(printf '%*s' "$SPACE_PADDING" '')
+wm="Unknown"
+if [[ "$XDG_CURRENT_DESKTOP" == *"GNOME"* ]]; then
+    wm="Mutter"
+elif [[ "$XDG_CURRENT_DESKTOP" == *"KDE"* ]]; then
+    wm="KWin"
+elif [[ "$XDG_CURRENT_DESKTOP" == *"Xfce"* ]]; then
+    wm="Xfwm4"
+else
+    wm=$(cat "$TMPD/wm" 2>/dev/null)
+    [[ -z "$wm" ]] && wm="Unknown"
+fi
 
-# Labels and values
+gpu=$(cat "$TMPD/gpu" 2>/dev/null)
+local_ip=$(cat "$TMPD/ip" 2>/dev/null)
+rm -rf "$TMPD"
+
 labels=("OS" "Model" "Host" "Kernel" "Uptime" "Packages" "Shell" "DE" "WM" "Display" "CPU" "Memory" "GPU" "Disk" "Battery" "Local IP" "Locale")
 values=("$os" "$model" "$host" "$kernel" "$uptime" "$packages" "$shell" "$de" "$wm" "$display_server" "$cpu" "$memory" "$gpu" "$disk" "$battery" "$local_ip" "$locale")
-colors=("$GREEN" "$CYAN" "$CYAN" "$PURPLE" "$YELLOW" "$PURPLE" "$CYAN" "$BLUE" "$BLUE" "$BLUE" "$GREEN" "$BLUE" "$PURPLE" "$RED" "$YELLOW" "$CYAN" "$CYAN")
+colors=("$C_OS" "$C_HW" "$C_HOST" "$C_CORE" "$C_TIME" "$C_PKG" "$C_ENV" "$C_DE" "$C_DE" "$C_ENV" "$C_CPU" "$C_MEM" "$C_GPU" "$C_DISK" "$C_BAT" "$C_NET" "$C_LOCALE")
 
-# Print top padding
+for ((i = 0; i < ${#values[@]}; i++)); do
+    v="${values[i]}"
+    if [[ ${#v} -gt $VALUE_MAX ]]; then
+        values[i]="${v:0:$((VALUE_MAX - 3))}..."
+    fi
+done
+
 echo
-
-# Print each line efficiently
-for ((i = 0; i < 6; i++)); do
-    printf "${BRIGHT_YELLOW}%-${ASCII_WIDTH}s${NC}${PADDING_STR}${RED}%-12s${NC}: %b%s${NC}\n" "${ascii_art[i]}" "${labels[i]}" "${colors[i]}" "${values[i]}"
+printf "${BOX}"
+printf "+%*s+\n" $((BOX_WIDTH-2)) "" | tr ' ' '-'
+while IFS= read -r line; do
+    [[ ${#line} -gt $((CONTENT_W - 2)) ]] && line="${line:0:$((CONTENT_W - 2))}"
+    pad=$((CONTENT_W - 2 - ${#line}))
+    [[ $pad -lt 0 ]] && pad=0
+    printf "${BOX}| ${NC}"
+    printf "${AC}%s${NC}" "$line"
+    printf "${NC}%*s${BOX}|${NC}\n" "$pad" ""
+done <<< "$BANNER"
+printf "${BOX}|%*s|${NC}\n" $((BOX_WIDTH-2)) ""
+for ((i = 0; i < ${#labels[@]}; i++)); do
+    pad=$((VALUE_MAX - ${#values[i]}))
+    [[ $pad -lt 0 ]] && pad=0
+    printf "${BOX}| ${NC}"
+    printf "${LBL}%-${LABEL_WIDTH}s${NC}: %b%s${NC}" "${labels[i]}" "${colors[i]}" "${values[i]}"
+    printf "${NC}%*s${BOX}|${NC}\n" "$pad" ""
 done
-
-# Print remaining lines
-for ((i = 6; i < ${#labels[@]}; i++)); do
-    printf "%-${ASCII_WIDTH}s${PADDING_STR}${RED}%-12s${NC}: %b%s${NC}\n" "" "${labels[i]}" "${colors[i]}" "${values[i]}"
-done
-
-# Print bottom padding
+printf "${BOX}+%*s+${NC}\n" $((BOX_WIDTH-2)) "" | tr ' ' '-'
 echo
