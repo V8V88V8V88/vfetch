@@ -2,6 +2,9 @@
 
 vfetch is a bash script that provides a colorful and informative display of system information, featuring a stylized ASCII art header.
 
+
+![vfetch](screenshot.png)
+
 ## Features
 
 - Displays key system information in a visually appealing format
